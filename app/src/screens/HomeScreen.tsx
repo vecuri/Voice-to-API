@@ -37,6 +37,7 @@ export function HomeScreen({ apiKey }: Props) {
     state: recorderState,
     seconds,
     formattedTime,
+    errorMessage,
     startRecording,
     stopRecording,
     resetError,
@@ -113,7 +114,7 @@ export function HomeScreen({ apiKey }: Props) {
     }
 
     if (recorderState === 'error') {
-      return <ErrorState onRetry={handleRetry} />;
+      return <ErrorState onRetry={handleRetry} message={errorMessage || undefined} />;
     }
 
     if (loading) {

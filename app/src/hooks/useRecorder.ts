@@ -194,8 +194,9 @@ export function useRecorder() {
       };
       await addPendingUpload(pending);
 
+      const reason = err?.message || 'Unknown error';
       setState('error');
-      setErrorMessage('Transcription failed. Audio saved locally.');
+      setErrorMessage(reason);
       setSeconds(0);
     }
   }, [seconds, clearTimer]);

@@ -4,14 +4,17 @@ import { Colors, Spacing } from '../theme';
 
 interface Props {
   onRetry: () => void;
+  message?: string;
 }
 
-export function ErrorState({ onRetry }: Props) {
+export function ErrorState({ onRetry, message }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.icon}>⚠️</Text>
       <Text style={styles.title}>Transcription failed</Text>
-      <Text style={styles.subtitle}>Audio saved locally. Will retry automatically.</Text>
+      <Text style={styles.subtitle}>
+        {message || 'Audio saved locally. Will retry automatically.'}
+      </Text>
       <Pressable onPress={onRetry} style={styles.button}>
         <Text style={styles.buttonText}>Retry Now</Text>
       </Pressable>

@@ -11,9 +11,57 @@ export function setApiKeyForRequests(key: string | null) {
   apiKey = key;
 }
 
+export function getBaseUrl(): string {
+  return BASE_URL;
+}
+
 function authHeaders(): Record<string, string> {
   if (!apiKey) return {};
   return { Authorization: `Bearer ${apiKey}` };
+}
+
+/** Quick connectivity check — throws with a clear message if backend is unreachable */
+async function checkConnectivity(): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(`${BASE_URL}/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error(
+        `Cannot reach server at ${BASE_URL}. Make sure your phone is on the same WiFi as your computer.`
+      );
+    }
+    throw new Error(
+      `Cannot connect to server: ${err.message}. Check that the backend is running and your phone is on the same WiFi.`
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+      ms
+    );
+    promise
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
 }
 
 export async function register(deviceId?: string): Promise<RegisterResponse> {
@@ -36,35 +84,42 @@ export async function uploadAudio(
 ): Promise<Transcript> {
   const fileInfo = await FileSystem.getInfoAsync(fileUri);
   if (!fileInfo.exists) {
-    throw new Error('Audio file not found');
+    throw new Error('Audio file not found on device');
   }
 
-  // Use FileSystem.uploadAsync — much more reliable than fetch+FormData on Android
-  const uploadResult = await FileSystem.uploadAsync(
-    `${BASE_URL}/v1/transcripts/upload`,
-    fileUri,
-    {
-      httpMethod: 'POST',
-      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-      fieldName: 'file',
-      mimeType: 'audio/mp4',
-      headers: {
-        ...authHeaders(),
-      },
-      parameters: {
-        duration_seconds: String(durationSeconds),
-        recorded_at: recordedAt,
-      },
-    }
+  // Check connectivity first — fails fast with a clear message
+  await checkConnectivity();
+
+  // Upload with a 90-second timeout (covers upload + Whisper processing)
+  const uploadResult = await withTimeout(
+    FileSystem.uploadAsync(
+      `${BASE_URL}/v1/transcripts/upload`,
+      fileUri,
+      {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType: 'audio/mp4',
+        headers: {
+          ...authHeaders(),
+        },
+        parameters: {
+          duration_seconds: String(durationSeconds),
+          recorded_at: recordedAt,
+        },
+      }
+    ),
+    90000,
+    'Upload'
   );
 
   if (uploadResult.status < 200 || uploadResult.status >= 300) {
-    let detail = 'Upload failed';
+    let detail = `Server error (HTTP ${uploadResult.status})`;
     try {
       const err = JSON.parse(uploadResult.body);
       detail = err.detail || detail;
     } catch {}
-    throw new Error(`${detail} (HTTP ${uploadResult.status})`);
+    throw new Error(detail);
   }
 
   try {
