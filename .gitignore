@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Expo / React Native
+app/android/
+app/ios/
+app/.expo/
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+
+# Environment
+.env
+backend/.env
+backend/voiceapi.db
+backend/voiceapi.db-wal
+backend/voiceapi.db-shm
+backend/__pycache__/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Temp
+/tmp/
+.claude/
