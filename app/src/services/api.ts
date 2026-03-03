@@ -34,42 +34,43 @@ export async function uploadAudio(
   durationSeconds: number,
   recordedAt: string
 ): Promise<Transcript> {
-  const formData = new FormData();
-
   const fileInfo = await FileSystem.getInfoAsync(fileUri);
   if (!fileInfo.exists) {
     throw new Error('Audio file not found');
   }
 
-  formData.append('file', {
-    uri: fileUri,
-    name: 'recording.m4a',
-    type: 'audio/mp4',
-  } as any);
-  formData.append('duration_seconds', String(durationSeconds));
-  formData.append('recorded_at', recordedAt);
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000);
-
-  try {
-    const response = await fetch(`${BASE_URL}/v1/transcripts/upload`, {
-      method: 'POST',
+  // Use FileSystem.uploadAsync — much more reliable than fetch+FormData on Android
+  const uploadResult = await FileSystem.uploadAsync(
+    `${BASE_URL}/v1/transcripts/upload`,
+    fileUri,
+    {
+      httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: 'file',
+      mimeType: 'audio/mp4',
       headers: {
         ...authHeaders(),
       },
-      body: formData,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
-      throw new Error(err.detail || 'Upload failed');
+      parameters: {
+        duration_seconds: String(durationSeconds),
+        recorded_at: recordedAt,
+      },
     }
+  );
 
-    return response.json();
-  } finally {
-    clearTimeout(timeoutId);
+  if (uploadResult.status < 200 || uploadResult.status >= 300) {
+    let detail = 'Upload failed';
+    try {
+      const err = JSON.parse(uploadResult.body);
+      detail = err.detail || detail;
+    } catch {}
+    throw new Error(`${detail} (HTTP ${uploadResult.status})`);
+  }
+
+  try {
+    return JSON.parse(uploadResult.body) as Transcript;
+  } catch {
+    throw new Error('Invalid response from server');
   }
 }
 

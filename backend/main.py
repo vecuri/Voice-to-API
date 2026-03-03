@@ -1,5 +1,6 @@
 import os
 import uuid
+import asyncio
 import tempfile
 import logging
 from datetime import datetime, timezone
@@ -60,6 +61,11 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "version": "1.0.0"}
 
 
 @app.exception_handler(RateLimitExceeded)
@@ -126,6 +132,8 @@ async def upload_transcript(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    logger.info(f"Upload request: filename={file.filename}, content_type={file.content_type}, duration={duration_seconds}s, user={user.id}")
+
     if not file.filename or not file.filename.lower().endswith((".m4a", ".mp4", ".wav", ".mp3", ".webm", ".ogg")):
         raise HTTPException(status_code=400, detail="Unsupported audio format. Use .m4a, .mp4, .wav, .mp3, .webm, or .ogg")
 
@@ -134,12 +142,21 @@ async def upload_transcript(
 
     try:
         content = await file.read()
+        file_size = len(content)
+        logger.info(f"Received file: {file_size} bytes")
+
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="Empty audio file received")
+
         with open(tmp_path, "wb") as f:
             f.write(content)
 
-        result = transcribe_audio(tmp_path)
+        # Run sync Whisper call in thread to avoid blocking the event loop
+        logger.info("Starting Whisper transcription...")
+        result = await asyncio.to_thread(transcribe_audio, tmp_path)
         text = result["text"]
         language = result["language"]
+        logger.info(f"Transcription complete: {len(text)} chars, language={language}")
 
         title = _make_title(text)
 
