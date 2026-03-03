@@ -18,6 +18,12 @@ function addForegroundServicePermissions(config) {
       'android.permission.RECORD_AUDIO',
     ];
 
+    // Allow cleartext HTTP traffic for local dev backend
+    const application = manifest.application?.[0];
+    if (application?.$) {
+      application.$['android:usesCleartextTraffic'] = 'true';
+    }
+
     for (const perm of requiredPermissions) {
       const exists = permissions.some(
         (p) => p.$?.['android:name'] === perm

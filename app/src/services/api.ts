@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system';
 import { RegisterResponse, Transcript, TranscriptListResponse } from '../types';
 
 const BASE_URL: string =
-  Constants.expoConfig?.extra?.apiBaseUrl || 'http://localhost:8000';
+  Constants.expoConfig?.extra?.apiBaseUrl || 'http://192.168.1.146:8000';
 
 let apiKey: string | null = null;
 
